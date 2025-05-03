@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';
-import 'sales_summary.dart'; // Import the SalesSummaryPage
-import 'salepage.dart'; // Import the SalesPage
+// ignore_for_file: use_build_context_synchronously
 
-// InventoryDashboard widget serves as the main screen for managing inventory.
+import 'package:flutter/material.dart';
+import 'sales_summary.dart';
+import 'salepage.dart';
+import 'module/database_helper.dart';
+
 class InventoryDashboard extends StatefulWidget {
   const InventoryDashboard({super.key});
 
@@ -11,21 +13,34 @@ class InventoryDashboard extends StatefulWidget {
 }
 
 class _InventoryDashboardState extends State<InventoryDashboard> {
-  // List to hold the current inventory items. Each item is a Map.
   final List<Map<String, dynamic>> _inventoryItems = [];
-  // List to hold the sales records. Each record is a Map.
-  final List<Map<String, dynamic>> _salesRecords = []; // Add sales records here
+  final List<Map<String, dynamic>> _salesRecords = [];
 
-  // Function to show a full-screen form for adding or editing inventory items.
+  @override
+  void initState() {
+    super.initState();
+    _refreshData();
+  }
+
+  Future<void> _refreshData() async {
+    final items = await DatabaseHelper.instance.getItems();
+    final records = await DatabaseHelper.instance.getSalesRecords();
+    if (!mounted) return;
+    setState(() {
+      _inventoryItems
+        ..clear()
+        ..addAll(items);
+      _salesRecords
+        ..clear()
+        ..addAll(records);
+    });
+  }
+
   void _showFullScreenForm({int? editIndex}) {
-    // Determine if we are editing an existing item or adding a new one.
     final isEditing = editIndex != null;
-    // Get the item data if editing, otherwise start with an empty map.
-    final Map<String, dynamic> item =
-        isEditing ? _inventoryItems[editIndex] : {};
-    // GlobalKey for the Form widget to handle validation.
+    final item =
+        isEditing ? Map.of(_inventoryItems[editIndex]) : <String, dynamic>{};
     final formKey = GlobalKey<FormState>();
-    // Controllers for the text fields in the form, initialized with existing data if editing.
     final controllers = {
       'category': TextEditingController(text: item['category'] ?? ''),
       'name': TextEditingController(text: item['name'] ?? ''),
@@ -38,24 +53,20 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
       'imageUrl': TextEditingController(text: item['imageUrl'] ?? ''),
     };
 
-    // Show a dialog which contains the form.
     showDialog(
       context: context,
       barrierDismissible: false, // Prevent closing by tapping outside
       builder:
           (_) => AlertDialog(
             title: Text(isEditing ? 'Edit Item' : 'Add Item'),
-            // Wrap content in SingleChildScrollView to prevent overflow on small screens.
             content: SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Form(
-                  key: formKey, // Assign the form key
+                  key: formKey,
                   child: Column(
-                    mainAxisSize:
-                        MainAxisSize.min, // Make column take minimum space
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Generate TextFormFields for text-based fields.
                       ...['category', 'name', 'brand', 'color'].map((field) {
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -63,18 +74,15 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
                             controller: controllers[field],
                             decoration: InputDecoration(
                               labelText:
-                                  field[0].toUpperCase() +
-                                  field.substring(1), // Capitalize first letter
+                                  field[0].toUpperCase() + field.substring(1),
                               border: const OutlineInputBorder(),
                             ),
-                            // Basic validation: field cannot be empty.
                             validator:
                                 (v) =>
                                     v == null || v.isEmpty ? 'Required' : null,
                           ),
                         );
                       }),
-                      // Row for Quantity and Price fields.
                       Row(
                         children: [
                           Expanded(
@@ -86,8 +94,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
                                   labelText: 'Quantity',
                                   border: OutlineInputBorder(),
                                 ),
-                                keyboardType:
-                                    TextInputType.number, // Only allow numbers
+                                keyboardType: TextInputType.number,
                                 validator:
                                     (v) =>
                                         v == null || v.isEmpty
@@ -96,7 +103,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12), // Spacing between fields
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Padding(
                               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -106,8 +113,7 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
                                   labelText: 'Price',
                                   border: OutlineInputBorder(),
                                 ),
-                                keyboardType:
-                                    TextInputType.number, // Only allow numbers
+                                keyboardType: TextInputType.number,
                                 validator:
                                     (v) =>
                                         v == null || v.isEmpty
@@ -118,7 +124,6 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
                           ),
                         ],
                       ),
-                      // TextFormField for Image URL.
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         child: TextFormField(
@@ -127,91 +132,141 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
                             labelText: 'Image URL (optional)',
                             border: OutlineInputBorder(),
                           ),
-                          // No validator here as it's optional
                         ),
                       ),
                       const SizedBox(height: 24),
-                      // Button to submit the form (Add or Update item).
-                      SizedBox(
-                        width: double.infinity, // Make button full width
-                        child: ElevatedButton(
-                          onPressed: () {
-                            // Validate the form.
-                            if (formKey.currentState!.validate()) {
-                              // Update the state to add or modify the item.
-                              setState(() {
-                                final newItem = {
-                                  'category': controllers['category']!.text,
-                                  'name': controllers['name']!.text,
-                                  'brand': controllers['brand']!.text,
-                                  'color': controllers['color']!.text,
-                                  'quantity': int.parse(
-                                    controllers['quantity']!.text,
-                                  ), // Parse quantity as int
-                                  'price': double.parse(
-                                    controllers['price']!.text,
-                                  ), // Parse price as double
-                                  // Use provided image URL or a placeholder if empty.
-                                  'imageUrl':
-                                      controllers['imageUrl']!.text.isNotEmpty
-                                          ? controllers['imageUrl']!.text
-                                          : 'https://via.placeholder.com/150',
-                                };
-                                if (isEditing) {
-                                  // Update existing item.
-                                  _inventoryItems[editIndex] = newItem;
-                                } else {
-                                  // Add new item to the list.
-                                  _inventoryItems.add(newItem);
-                                }
-                              });
-                              // Close the dialog.
-                              Navigator.of(context).pop();
-                              // Show a success snackbar.
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    isEditing ? 'Item updated' : 'Item added',
-                                  ),
-                                  backgroundColor: Colors.green,
-                                  duration: const Duration(seconds: 2),
-                                ),
-                              );
-                            }
-                          },
-                          child: Text(isEditing ? 'Update Item' : 'Add Item'),
-                        ),
-                      ),
+                      // Removed the full-width button here
                     ],
                   ),
                 ),
               ),
             ),
+            // Added actions row for buttons
+            actions: [
+              // Cancel Button
+              TextButton(
+                onPressed: () {
+                  // Dispose controllers to prevent memory leaks
+                  for (var c in controllers.values) {
+                    c.dispose();
+                  }
+                  Navigator.of(context).pop(); // Close the dialog
+                },
+                child: const Text('Cancel'),
+              ),
+              // Add/Update Button
+              ElevatedButton(
+                onPressed: () async {
+                  if (!formKey.currentState!.validate()) return;
+
+                  final newItem = {
+                    'category': controllers['category']!.text,
+                    'name': controllers['name']!.text,
+                    'brand': controllers['brand']!.text,
+                    'color': controllers['color']!.text,
+                    'quantity': int.parse(controllers['quantity']!.text),
+                    'price': double.parse(controllers['price']!.text),
+                    'imageUrl':
+                        controllers['imageUrl']!.text.isNotEmpty
+                            ? controllers['imageUrl']!.text
+                            : 'https://via.placeholder.com/150', // Placeholder if empty
+                  };
+
+                  if (isEditing) {
+                    // Update existing item
+                    await DatabaseHelper.instance.updateItem(
+                      _inventoryItems[editIndex]['id'],
+                      newItem,
+                    );
+                  } else {
+                    // Insert new item
+                    final id = await DatabaseHelper.instance.insertItem(
+                      newItem,
+                    );
+                    newItem['id'] =
+                        id; // Add the generated ID to the local item map
+                  }
+
+                  // Dispose controllers before navigating
+                  for (var c in controllers.values) {
+                    c.dispose();
+                  }
+
+                  if (!mounted) return; // Check if widget is still mounted
+
+                  Navigator.of(context).pop(); // Close the dialog
+
+                  // Refresh data and show confirmation
+                  await _refreshData();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(isEditing ? 'Item updated' : 'Item added'),
+                      backgroundColor: Colors.green,
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                },
+                child: Text(isEditing ? 'Update Item' : 'Add Item'),
+              ),
+            ],
           ),
     );
   }
 
-  // Function to delete an item from the inventory.
-  void _deleteItem(int index) {
-    // Update the state to remove the item at the given index.
-    setState(() => _inventoryItems.removeAt(index));
-    // Show a deletion confirmation snackbar.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Item deleted'),
-        backgroundColor: Colors.red,
-        duration: Duration(seconds: 2),
-      ),
-    );
+  void _deleteItem(int index) async {
+    // Show a confirmation dialog before deleting
+    final bool confirm =
+        await showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Confirm Delete'),
+              content: Text(
+                'Are you sure you want to delete "${_inventoryItems[index]['name']}"?',
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed:
+                      () => Navigator.of(
+                        context,
+                      ).pop(false), // Return false on Cancel
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  onPressed:
+                      () => Navigator.of(
+                        context,
+                      ).pop(true), // Return true on Delete
+                  child: const Text('Delete'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false; // Default to false if dialog is dismissed
+
+    if (confirm) {
+      final id = _inventoryItems[index]['id'];
+      await DatabaseHelper.instance.deleteItem(id);
+      if (!mounted) return;
+      await _refreshData();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Item deleted'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
-  // Function to navigate to the Sales Summary page.
   void _navigateToSalesSummary() {
+    // Navigate to Sales Summary, passing current data
     Navigator.of(context).push(
       MaterialPageRoute(
         builder:
             (context) => SalesSummaryPage(
-              // Pass the current inventory items and sales records to the summary page.
               inventoryItems: _inventoryItems,
               salesRecords: _salesRecords,
             ),
@@ -219,31 +274,51 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
     );
   }
 
-  // Function to navigate to the Sales Page.
   void _navigateToSalesPage() {
+    // Navigate to Sales Page, passing current data and providing a sale callback
     Navigator.of(context).push(
       MaterialPageRoute(
         builder:
             (context) => SalePage(
-              // Pass the current inventory items.
               inventoryItems: _inventoryItems,
-              // Pass a copy of the current inventory items as the initial state for the SalePage.
               initialInventory: List.from(_inventoryItems), // Pass a copy
-              // Pass the callback function to handle sales.
-              onSale: (index, qty) {
-                // Update the state in the InventoryDashboard when a sale occurs.
-                setState(() {
-                  final item = _inventoryItems[index];
-                  // Decrease the quantity of the sold item.
-                  item['quantity'] -= qty;
-                  // Add a new record to the sales records list.
-                  _salesRecords.add({
-                    'name': item['name'],
-                    'quantity': qty,
-                    'price': item['price'],
-                    'timestamp': DateTime.now(), // Add a timestamp for the sale
-                  });
+              onSale: (index, qty) async {
+                // Logic to handle a sale:
+                // 1. Check if enough stock is available
+                if (_inventoryItems[index]['quantity'] < qty) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Not enough stock'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+                // 2. Update inventory quantity in the database
+                await DatabaseHelper.instance.updateItem(
+                  _inventoryItems[index]['id'],
+                  {'quantity': _inventoryItems[index]['quantity'] - qty},
+                );
+                // 3. Insert a sales record into the database
+                await DatabaseHelper.instance.insertSalesRecord({
+                  'name': _inventoryItems[index]['name'],
+                  'quantity': qty,
+                  'price': _inventoryItems[index]['price'],
+                  'timestamp':
+                      DateTime.now().toIso8601String(), // Record sale time
                 });
+                // 4. Refresh local state and show confirmation
+                if (!mounted) return;
+                await _refreshData(); // Refresh both inventory and sales data
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Sold $qty of ${_inventoryItems[index]['name']}',
+                    ),
+                    backgroundColor: Colors.green,
+                  ),
+                );
               },
             ),
       ),
@@ -253,142 +328,150 @@ class _InventoryDashboardState extends State<InventoryDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // App bar for the Inventory Dashboard.
       appBar: AppBar(
         title: const Text('Inventory Dashboard'),
         backgroundColor: Colors.blue,
         actions: [
-          // Button to navigate to Sales Summary.
+          // Navigation buttons in AppBar
           IconButton(
             icon: const Icon(Icons.analytics),
+            tooltip: 'Sales Summary',
             onPressed: _navigateToSalesSummary,
           ),
-          // Button for Inventory (current page).
+          // Current page icon (Inventory)
           IconButton(
             icon: const Icon(Icons.inventory),
-            onPressed: () {}, // Do nothing as we are on this page
+            tooltip: 'Inventory',
+            onPressed: () {}, // No action needed for the current page
           ),
-          // Button to navigate to Sales Page.
           IconButton(
             icon: const Icon(Icons.attach_money),
+            tooltip: 'Make Sale',
             onPressed: _navigateToSalesPage,
           ),
         ],
       ),
-      // Body of the Inventory Dashboard.
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        // Display a message if inventory is empty, otherwise display the GridView.
         child:
             _inventoryItems.isEmpty
                 ? const Center(child: Text('No items in inventory'))
-                : GridView.builder(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2, // 2 items per row
-                    childAspectRatio: 3 / 4, // Aspect ratio of each grid item
-                    crossAxisSpacing: 16, // Horizontal spacing
-                    mainAxisSpacing: 16, // Vertical spacing
+                : RefreshIndicator(
+                  onRefresh: _refreshData, // Pull to refresh functionality
+                  child: GridView.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2, // 2 items per row
+                          childAspectRatio:
+                              3 / 4, // Aspect ratio of each item card
+                          crossAxisSpacing:
+                              16, // Horizontal space between items
+                          mainAxisSpacing: 16, // Vertical space between items
+                        ),
+                    itemCount: _inventoryItems.length,
+                    itemBuilder: (context, index) {
+                      final item = _inventoryItems[index];
+                      return Card(
+                        elevation: 3,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          children: [
+                            Expanded(
+                              flex: 3, // Image takes 3/5 of the card height
+                              child: ClipRRect(
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(12),
+                                ),
+                                child: Image.network(
+                                  item['imageUrl'],
+                                  fit: BoxFit.cover,
+                                  // Error builder for broken images
+                                  errorBuilder:
+                                      (context, error, stackTrace) => Container(
+                                        color: Colors.grey[300],
+                                        child: const Icon(
+                                          Icons.image_not_supported,
+                                          size: 50,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              flex:
+                                  2, // Text details take 2/5 of the card height
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item['name'],
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16, // Increased font size
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4), // Added spacing
+                                    Text(
+                                      'Qty: ${item['quantity']}',
+                                      style: const TextStyle(fontSize: 14),
+                                    ), // Styled text
+                                    Text(
+                                      'Price: \$${item['price'].toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.green,
+                                      ),
+                                    ), // Styled text
+                                    const Spacer(), // Pushes buttons to the bottom
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        // Edit Button
+                                        IconButton(
+                                          icon: const Icon(Icons.edit),
+                                          tooltip: 'Edit Item',
+                                          onPressed:
+                                              () => _showFullScreenForm(
+                                                editIndex: index,
+                                              ),
+                                        ),
+                                        // Delete Button
+                                        IconButton(
+                                          icon: const Icon(Icons.delete),
+                                          tooltip: 'Delete Item',
+                                          color:
+                                              Colors.red, // Styled delete icon
+                                          onPressed: () => _deleteItem(index),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                  itemCount: _inventoryItems.length,
-                  itemBuilder: (context, index) {
-                    final item = _inventoryItems[index];
-                    return Card(
-                      elevation: 3, // Card shadow
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          12,
-                        ), // Rounded corners
-                      ),
-                      child: Column(
-                        children: [
-                          // Expanded widget for the image.
-                          Expanded(
-                            flex: 3, // Takes 3/5 of the column space
-                            child: ClipRRect(
-                              // Clip image to card's rounded corners
-                              borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(12),
-                              ),
-                              child: Image.network(
-                                item['imageUrl'],
-                                fit: BoxFit.cover, // Cover the available space
-                                // Add an error builder for broken image URLs
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Container(
-                                    color: Colors.grey[300],
-                                    child: const Icon(
-                                      Icons.image_not_supported,
-                                      size: 50,
-                                      color: Colors.grey,
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                          // Expanded widget for item details and actions.
-                          Expanded(
-                            flex: 2, // Takes 2/5 of the column space
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Item name.
-                                  Text(
-                                    item['name'],
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    maxLines: 1, // Prevent text wrapping
-                                    overflow:
-                                        TextOverflow
-                                            .ellipsis, // Show ellipsis if text is too long
-                                  ),
-                                  // Item quantity.
-                                  Text('Qty: ${item['quantity']}'),
-                                  const Spacer(), // Pushes the action row to the bottom
-                                  // Row for Edit and Delete buttons.
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment
-                                            .end, // Align buttons to the right
-                                    children: [
-                                      // Edit button.
-                                      IconButton(
-                                        icon: const Icon(Icons.edit),
-                                        onPressed:
-                                            () => _showFullScreenForm(
-                                              editIndex: index,
-                                            ), // Open form for editing
-                                      ),
-                                      // Delete button.
-                                      IconButton(
-                                        icon: const Icon(Icons.delete),
-                                        onPressed:
-                                            () => _deleteItem(
-                                              index,
-                                            ), // Delete the item
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
                 ),
       ),
-      // Floating action button to add a new item.
       floatingActionButton: FloatingActionButton(
-        onPressed:
-            () => _showFullScreenForm(), // Open form for adding a new item
+        onPressed: () => _showFullScreenForm(), // Show form to add new item
         backgroundColor: Colors.blue,
         child: const Icon(Icons.add),
       ),
     );
   }
 }
+
+// Note: The SalesSummaryPage and SalePage widgets are defined in their own files
+// (sales_summary.dart and salepage.dart) as per the import statements.
+// The DatabaseHelper is assumed to be implemented in module/database_helper.dart.
